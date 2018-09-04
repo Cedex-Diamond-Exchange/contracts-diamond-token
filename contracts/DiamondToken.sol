@@ -93,7 +93,7 @@ contract DiamondAccessControl {
         _;
     }
     
-    modifier onlyAdminAndCEO() {
+    modifier onlyAdminOrCEO() {
         require(msg.sender == admin || msg.sender == CEO);
         _;
     }
@@ -108,9 +108,9 @@ contract DiamondAccessControl {
         admin = _newAdmin;
     }
     
-        /// @dev Called by any "C-level" role to pause the contract. Used only when
+    /// @dev Called by any "C-level" role to pause the contract. Used only when
     ///  a bug or exploit is detected and we need to limit damage.
-    function pause() external onlyAdminAndCEO whenNotPaused {
+    function pause() external onlyAdminOrCEO whenNotPaused {
         paused = true;
     }
 
@@ -131,6 +131,19 @@ contract DiamondAccessControl {
 contract DiamondBase is DiamondAccessControl {
     
     using SafeMath for uint256;
+    
+    event Transfer(address from, address to, string diamondId);
+    event TransactionHistory(  
+        string indexed _diamondId, 
+        address _seller, 
+        string _sellerId, 
+        address _buyer, 
+        string _buyerId, 
+        uint256 _usdPrice, 
+        uint256 _cedexPrice,
+        uint256 timestamp
+
+    );
     
     /*** DATA TYPE ***/
     /// @dev The main Kitty struct. Every dimond is represented by a copy of this structure
@@ -198,12 +211,22 @@ contract DiamondBase is DiamondAccessControl {
         diamondExists[_diamondId] = true; 
     }
     
-    function _updateDiamond(
-        
-    )
+    function _internalTransfer(
+        string _diamondId, 
+        address _seller, 
+        string _sellerId, 
+        address _buyer, 
+        string _buyerId, 
+        uint256 _usdPrice, 
+        uint256 _cedexPrice
+    )   
         internal 
     {
-        
+        Diamond storage diamond = diamondIdToMetadata[_diamondId];
+        diamond.ownerId = _buyerId;
+        _transfer(_seller, _buyer, _diamondId);   
+        emit TransactionHistory(_diamondId, _seller, _sellerId, _buyer, _buyerId, _usdPrice, _cedexPrice, now);
+
     }
     
      function _transfer(address _from, address _to, string _diamondId) internal {
@@ -213,7 +236,7 @@ contract DiamondBase is DiamondAccessControl {
         balances[_to] = balances[_to].add(1);
         diamondIdToOwner[_diamondId] = _to;
         delete diamondIdToApproved[_diamondId];
-        // Transfer(_from, _to, _diamondId);
+        Transfer(_from, _to, _diamondId);
     }
 
     function _burn(string _diamondId) internal {
@@ -225,7 +248,7 @@ contract DiamondBase is DiamondAccessControl {
         delete diamondExists[_diamondId];
         delete diamondIdToApproved[_diamondId];
         delete diamondOutside[_diamondId];
-        // Transfer(_from, address(0), _diamondId);
+        emit Transfer(_from, address(0), _diamondId);
     }
     
     function _isDiamondOutside(string _diamondId) internal view returns (bool) {
@@ -302,8 +325,8 @@ contract DiamondBase721 is DiamondBase, ERC721 {
 /// @dev The main contract, keeps track of diamonds.
 contract DiamondCore is DiamondBase721 {
  
-  /// @notice Creates the main Diamond smart contract instance.
-    function KittyCore() public {
+    /// @notice Creates the main Diamond smart contract instance.
+    constructor() public {
         // the creator of the contract is the initial CEO
         CEO = msg.sender;
     }
@@ -318,7 +341,7 @@ contract DiamondCore is DiamondBase721 {
         string _IPFS
     ) 
         external 
-        onlyAdminAndCEO 
+        onlyAdminOrCEO 
         whenNotPaused 
     {
         require(!diamondExists[_diamondId]);
@@ -346,7 +369,7 @@ contract DiamondCore is DiamondBase721 {
         string _additionalInfo
     ) 
         external 
-        onlyAdminAndCEO 
+        onlyAdminOrCEO 
         whenNotPaused 
     {
         require(!_isDiamondOutside(_diamondId));
@@ -373,7 +396,7 @@ contract DiamondCore is DiamondBase721 {
         uint256 _cedexPrice
     ) 
         external 
-        onlyAdminAndCEO 
+        onlyAdminOrCEO 
         whenNotPaused 
     {
         require(!_isDiamondOutside(_diamondId));
@@ -381,13 +404,20 @@ contract DiamondCore is DiamondBase721 {
         require(_buyer != address(0));
         require(_buyer != address(this));
         require(_buyer != ownerOf(_diamondId));
-        _transfer(_seller, _buyer, _diamondId);
-        // TransactionHistory(_diamondId, _from, _to, now, _usdPrice, _cedexPrice);
+        _internalTransfer(_diamondId, _seller, _sellerId, _buyer, _buyerId, _usdPrice, _cedexPrice);
     }
     
-    function burn(string _diamondId) external onlyAdminAndCEO whenNotPaused {
+    function burn(string _diamondId) external onlyAdminOrCEO whenNotPaused {
         require(!_isDiamondOutside(_diamondId));
         _burn(_diamondId);
+    }
+    
+    function withdraw() {
+        // TBD
+    }
+    
+    function reinstate() {
+        // TBD
     }
     
     function getDiamond(string _diamondId) 
@@ -401,13 +431,13 @@ contract DiamondCore is DiamondBase721 {
             string gemSubcategory, 
             string certificateURL, 
             string IPFS, 
-            string custodianName, 
-            string custodianLocation, 
-            string photoURL, 
-            string invoiceURL, 
-            uint256 arrivalTime, 
-            uint256 confirmationTime, 
-            string additionalInfo
+            string custodianName
+            // string custodianLocation 
+            // string photoURL, 
+            // string invoiceURL, 
+            // uint256 arrivalTime, 
+            // uint256 confirmationTime, 
+            // string additionalInfo
         )
     {
         Diamond storage diamond = diamondIdToMetadata[_diamondId];
@@ -420,11 +450,11 @@ contract DiamondCore is DiamondBase721 {
         certificateURL = diamond.certificateURL;
         IPFS = diamond.IPFS;
         custodianName = diamond.custodianName;
-        custodianLocation = diamond.custodianLocation;
-        photoURL = diamond.photoURL;
-        invoiceURL = diamond.invoiceURL;
-        arrivalTime = diamond.arrivalTime;
-        confirmationTime = diamond.confirmationTime;
-        additionalInfo = diamond.additionalInfo;
+        // custodianLocation = diamond.custodianLocation;
+        // photoURL = diamond.photoURL;
+        // invoiceURL = diamond.invoiceURL;
+        // arrivalTime = diamond.arrivalTime;
+        // confirmationTime = diamond.confirmationTime;
+        // additionalInfo = diamond.additionalInfo;
     }
 }
