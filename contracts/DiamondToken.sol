@@ -907,6 +907,7 @@ contract DiamondBase is DiamondAccessControl {
       string custodianLocation;
       string photoURL;
       string invoiceURL;
+      uint256 creationTime;
       uint256 arrivalTime;
       uint256 confirmationTime;
       string additionalInfo;
@@ -950,6 +951,7 @@ contract DiamondBase is DiamondAccessControl {
     {
       Diamond memory diamond;
       
+      diamond.creationTime = now;
       diamond.status = "Pending";
       diamond.ownerId = _ownerId;
       diamond.gemCompositeScore = _gemCompositeScore;
@@ -1188,7 +1190,7 @@ contract DiamondCore is DiamondBase721 {
     {
         Diamond storage diamond = diamondIdToMetadata[_diamondId];
         
-        strings.slice[] memory parts = new strings.slice[](14);
+        strings.slice[] memory parts = new strings.slice[](15);
     
         parts[0] = convertToSlice(diamondIdToOwner[_diamondId].addressToAsciiString());
         parts[1] = convertToSlice(diamond.ownerId);
@@ -1202,8 +1204,10 @@ contract DiamondCore is DiamondBase721 {
         parts[9] = convertToSlice(diamond.photoURL);
         parts[10] = convertToSlice(diamond.invoiceURL);
         parts[11] = convertToSlice(diamond.additionalInfo);
-        parts[12] = convertToSlice(diamond.arrivalTime.uint2str());
-        parts[13] = convertToSlice(diamond.confirmationTime.uint2str());
+        parts[12] = convertToSlice(diamond.creationTime.uint2str());
+        parts[13] = convertToSlice(diamond.arrivalTime.uint2str());
+        parts[14] = convertToSlice(diamond.confirmationTime.uint2str());
+
                 
         diamondMetadata = ", ".toSlice().join(parts);
     }
